@@ -9,8 +9,7 @@ import urllib2
 from datetime import datetime
 from bs4 import BeautifulSoup
 
-#### FUNCTIONS 1.1
-import requests
+#### FUNCTIONS 1.0
 
 def validateFilename(filename):
     filenameregex = '^[a-zA-Z0-9]+_[a-zA-Z0-9]+_[a-zA-Z0-9]+_[0-9][0-9][0-9][0-9]_[0-9QY][0-9]$'
@@ -38,20 +37,20 @@ def validateFilename(filename):
 
 def validateURL(url):
     try:
-        r = requests.get(url)
+        r = urllib2.urlopen(url)
         count = 1
-        while r.status_code == 500 and count < 4:
+        while r.getcode() == 500 and count < 4:
             print ("Attempt {0} - Status code: {1}. Retrying.".format(count, r.status_code))
             count += 1
-            r = requests.get(url)
+            r = urllib2.urlopen(url)
         sourceFilename = r.headers.get('Content-Disposition')
 
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
         else:
             ext = os.path.splitext(url)[1]
-        validURL = r.status_code == 200
-        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx']
+        validURL = r.getcode() == 200
+        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx', '.pdf']
         return validURL, validFiletype
     except:
         print ("Error validating URL.")
@@ -84,32 +83,39 @@ def convert_mth_strings ( mth_string ):
 
 #### VARIABLES 1.0
 
-entity_id = "RMY_NASNFT_gov"
-url = "http://www.nsft.nhs.uk/About-us/Pages/Spending-over-25000.aspx"
+entity_id = "NFTRNL_NCAHNFT_gov"
+url = "http://www.ncuh.nhs.uk/about-us/trust-expenditure/index.aspx"
 errors = 0
 data = []
 
 #### READ HTML 1.0
-import requests
-html = requests.get(url)
-soup = BeautifulSoup(html.text, 'lxml')
+
+html = urllib2.urlopen(url)
+soup = BeautifulSoup(html, 'lxml')
 
 
 #### SCRAPE DATA
 
-blocks = soup.find('table', 'ms-rteTable-default').find_all('tr')
+blocks = soup.find('p', text=re.compile('Expenditure over')).find_next('ul').find_all('a')
 for block in blocks:
-    year_title = block.find('td').text.replace(u'\u200b', '')
-    links = block.find_all('a')
-    for link in links:
-        if '.csv' in link['href'] or '.xls' in link['href'] or '.xlsx' in link['href']:
-            title = link.text.strip()
-            csvYr = year_title
-            csvMth = title[:3]
-            if csvMth:
-                url = 'http://www.nsft.nhs.uk'+link['href']
-                csvMth = convert_mth_strings(csvMth.upper())
-                data.append([csvYr, csvMth, url])
+    url = 'http://www.ncuh.nhs.uk'+block['href']
+    csvMth = block.text[:3]
+    csvYr = '2018'
+archive_blocks = soup.find('p', text=re.compile('Expenditure over')).find_all_next('ul')[1].find_all('a')
+for archive_block in archive_blocks:
+    archive_link = 'http://www.ncuh.nhs.uk'+archive_block['href']
+    archive_html = urllib2.urlopen(archive_link)
+    archive_soup = BeautifulSoup(archive_html, 'lxml')
+    arch_blocks = archive_soup.find('h1').find_next('ul').find_all('a')
+    for arch_block in arch_blocks:
+        if 'http' not in arch_block['href']:
+            url = 'http://www.ncuh.nhs.uk' + arch_block['href']
+        else:
+            url = arch_block['href']
+        csvMth = arch_block.text[:3]
+        csvYr = archive_soup.find('h1').text.strip()[-4:]
+        csvMth = convert_mth_strings(csvMth.upper())
+        data.append([csvYr, csvMth, url])
 
 
 #### STORE DATA 1.0
