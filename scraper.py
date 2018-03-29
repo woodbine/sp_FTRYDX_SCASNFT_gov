@@ -45,18 +45,13 @@ def validateURL(url):
             count += 1
             r = requests.get(url)
         sourceFilename = r.headers.get('Content-Disposition')
+
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
         else:
             ext = os.path.splitext(url)[1]
-        if 'application/pdf' in r.headers.get('content-type'):
-            ext = '.pdf'
-        elif 'text/plain' in r.headers.get('content-type'):
-            ext = '.csv'
-        elif 'text/csv' in r.headers.get('content-type'):
-            ext = '.csv'
         validURL = r.status_code == 200
-        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx', '.pdf']
+        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx']
         return validURL, validFiletype
     except:
         print ("Error validating URL.")
@@ -89,44 +84,32 @@ def convert_mth_strings ( mth_string ):
 
 #### VARIABLES 1.0
 
-entity_id = "FTRPAX_MNFT_gov"
-url = "https://www.medway.nhs.uk/patients-and-public/access-to-information/publication-scheme/expenditure-over-25000.htm"
+entity_id = "RMY_NASNFT_gov"
+url = "http://www.nsft.nhs.uk/About-us/Pages/Spending-over-25000.aspx"
 errors = 0
 data = []
 
 #### READ HTML 1.0
+import requests
+html = requests.get(url)
+soup = BeautifulSoup(html.text, 'lxml')
 
-html = urllib2.urlopen(url)
-soup = BeautifulSoup(html, 'lxml')
 
 #### SCRAPE DATA
 
-links_set = set()
-links = soup.find('div', 'main-content').find_all('ul')
-for ls in links:
-    for l in ls.find_all('a'):
-        links_set.add(l)
-for link in links_set:
-        url = 'https://www.medway.nhs.uk'+link['href']
-        title = link.text
-        csvMth = title.split()[0].strip()[:3]
-        csvYr = title.split()[1]
-        if 'November 2010 to March 2011' in title:
-            csvMth = 'Q0'
-            csvYr = '2010'
-        if 'March to August 2015' in title:
-            csvMth = 'Q0'
-            csvYr = '2015'
-        if 'October to December 2015' in title:
-            csvMth = 'Q4'
-            csvYr = '2015'
-        if 'April to October 2010' in title:
-            csvMth = 'Q0'
-            csvYr = '2010'
-
-        csvMth = convert_mth_strings(csvMth.upper())
-        data.append([csvYr, csvMth, url])
-
+blocks = soup.find('table', 'ms-rteTable-default').find_all('tr')
+for block in blocks:
+    year_title = block.find('td').text.replace(u'\u200b', '')
+    links = block.find_all('a')
+    for link in links:
+        if '.csv' in link['href'] or '.xls' in link['href'] or '.xlsx' in link['href']:
+            title = link.text.strip()
+            csvYr = year_title
+            csvMth = title[:3]
+            if csvMth:
+                url = 'http://www.nsft.nhs.uk'+link['href']
+                csvMth = convert_mth_strings(csvMth.upper())
+                data.append([csvYr, csvMth, url])
 
 
 #### STORE DATA 1.0
@@ -150,4 +133,3 @@ if errors > 0:
 
 
 #### EOF
-
