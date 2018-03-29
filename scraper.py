@@ -9,8 +9,8 @@ import urllib2
 from datetime import datetime
 from bs4 import BeautifulSoup
 
-
-#### FUNCTIONS 1.0
+#### FUNCTIONS 1.1
+import requests
 
 def validateFilename(filename):
     filenameregex = '^[a-zA-Z0-9]+_[a-zA-Z0-9]+_[a-zA-Z0-9]+_[0-9][0-9][0-9][0-9]_[0-9QY][0-9]$'
@@ -38,19 +38,24 @@ def validateFilename(filename):
 
 def validateURL(url):
     try:
-        r = urllib2.urlopen(url)
+        r = requests.get(url)
         count = 1
-        while r.getcode() == 500 and count < 4:
+        while r.status_code == 500 and count < 4:
             print ("Attempt {0} - Status code: {1}. Retrying.".format(count, r.status_code))
             count += 1
-            r = urllib2.urlopen(url)
+            r = requests.get(url)
         sourceFilename = r.headers.get('Content-Disposition')
-
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
         else:
             ext = os.path.splitext(url)[1]
-        validURL = r.getcode() == 200
+        if 'application/pdf' in r.headers.get('content-type'):
+            ext = '.pdf'
+        elif 'text/plain' in r.headers.get('content-type'):
+            ext = '.csv'
+        elif 'text/csv' in r.headers.get('content-type'):
+            ext = '.csv'
+        validURL = r.status_code == 200
         validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx', '.pdf']
         return validURL, validFiletype
     except:
@@ -82,52 +87,47 @@ def convert_mth_strings ( mth_string ):
         mth_string = mth_string.replace(k, v)
     return mth_string
 
-
 #### VARIABLES 1.0
 
-entity_id = "CCG07Y_HARCHNT_gov"
-url = "http://www.hrch.nhs.uk/about-us/publications-declarations/"
+entity_id = "FTRPAX_MNFT_gov"
+url = "https://www.medway.nhs.uk/patients-and-public/access-to-information/publication-scheme/expenditure-over-25000.htm"
 errors = 0
 data = []
-
 
 #### READ HTML 1.0
 
 html = urllib2.urlopen(url)
-soup = BeautifulSoup(html, "lxml")
-
+soup = BeautifulSoup(html, 'lxml')
 
 #### SCRAPE DATA
 
-title_divs = soup.find_all('div', id='panelGroupBody_28237')
-for title_div in title_divs:
-    blocks = title_div.find_all('a', 'link-asset ')+title_div.find_all('a', 'oLinkAsset ')+title_div.find_all('a', 'oLinkAssetXls ')
-    for block in blocks:
-        link = 'http://www.hrch.nhs.uk'+block['href']
-        title = block.text.strip()
-        if 'month' in title:
-            if '1-11' in title:
-                csvMth = 'Q0'
-                csvYr = title.split('/')[0][-4:]
-            if '9-12' in title:
-                csvMth = 'Q0'
-                csvYr = title.split('/')[0][-4:]
-            if '1-3' in title:
-                csvMth = 'Q1'
-                csvYr = title.split('/')[0][-4:]
-            if '4-8' in title:
-                csvMth = 'Q0'
-                csvYr = title.split('/')[0][-4:]
-            if ' all ' in title:
-                csvYr = 'Y1'
-                csvYr = title.split('/')[0][-4:]
-            csvMth = convert_mth_strings(csvMth.upper())
-            data.append([csvYr, csvMth, link])
-        else:
-            csvMth = title[:3]
-            csvYr = title[-4:]
-            csvMth = convert_mth_strings(csvMth.upper())
-            data.append([csvYr, csvMth, link])
+links_set = set()
+links = soup.find('div', 'main-content').find_all('ul')
+for ls in links:
+    for l in ls.find_all('a'):
+        links_set.add(l)
+for link in links_set:
+        url = 'https://www.medway.nhs.uk'+link['href']
+        title = link.text
+        csvMth = title.split()[0].strip()[:3]
+        csvYr = title.split()[1]
+        if 'November 2010 to March 2011' in title:
+            csvMth = 'Q0'
+            csvYr = '2010'
+        if 'March to August 2015' in title:
+            csvMth = 'Q0'
+            csvYr = '2015'
+        if 'October to December 2015' in title:
+            csvMth = 'Q4'
+            csvYr = '2015'
+        if 'April to October 2010' in title:
+            csvMth = 'Q0'
+            csvYr = '2010'
+
+        csvMth = convert_mth_strings(csvMth.upper())
+        data.append([csvYr, csvMth, url])
+
+
 
 #### STORE DATA 1.0
 
@@ -150,3 +150,4 @@ if errors > 0:
 
 
 #### EOF
+
