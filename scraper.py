@@ -44,18 +44,20 @@ def validateURL(url):
             count += 1
             r = urllib2.urlopen(url)
         sourceFilename = r.headers.get('Content-Disposition')
-
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
-        else:
+        elif not sourceFilename:
             ext = os.path.splitext(url)[1]
+        if 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' in r.headers.get('content-type'):
+            ext = '.xlsx'
+        elif 'application/vnd.ms-excel' in r.headers.get('content-type'):
+            ext = '.xls'
         validURL = r.getcode() == 200
-        validFiletype = ext.lower() in ['.csv', '.xls', '.zip', '.xlsx', '.pdf']
+        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx', '.pdf']
         return validURL, validFiletype
     except:
         print ("Error validating URL.")
         return False, False
-
 
 
 def validate(filename, file_url):
@@ -84,32 +86,29 @@ def convert_mth_strings ( mth_string ):
 
 #### VARIABLES 1.0
 
-entity_id = "FTRGMX_PHNFT_gov"
-url = "http://www.papworthhospital.nhs.uk/content.php?/about/governance/publication_of_spend"
+entity_id = "FTRM3X_SRNFT_gov"
+url = "http://www.srft.nhs.uk/media-centre/publications/25k-reports/"
 errors = 0
 data = []
+
 
 #### READ HTML 1.0
 
 html = urllib2.urlopen(url)
 soup = BeautifulSoup(html, 'lxml')
 
-
 #### SCRAPE DATA
 
+links = soup.find_all('tr')[1:]
+for link in links:
+    title = link.find_all('td')[2]
+    file_title = title.find('a')['title']
+    url = 'http://www.srft.nhs.uk'+title.find('a')['href']
+    csvMth = file_title.split('-')[1][:2]
+    csvYr = file_title[:4]
+    csvMth = convert_mth_strings(csvMth.upper())
+    data.append([csvYr, csvMth, url])
 
-blocks = soup.find_all('a')
-for block in blocks:
-    if 'Transactions' in block.text:
-        if 'http' not in block['href']:
-            url = 'http://www.royalpapworth.nhs.uk' + block['href']
-        else:
-            url = block['href'].replace('?v2', '')
-        title = block.text
-        csvYr = title.split('- ')[-1].strip()[-4:]
-        csvMth = title.split('- ')[-1].strip()[:3]
-        csvMth = convert_mth_strings(csvMth.upper())
-        data.append([csvYr, csvMth, url])
 
 
 #### STORE DATA 1.0
@@ -133,3 +132,4 @@ if errors > 0:
 
 
 #### EOF
+
