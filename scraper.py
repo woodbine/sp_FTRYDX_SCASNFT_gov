@@ -107,6 +107,8 @@ for block in blocks:
         csvYr = '2017'
     if '17-1' in csvYr:
         csvYr = '2017'
+    if '018-' in csvYr:
+        csvYr = '2018'
     csvMth = convert_mth_strings(csvMth.upper())
     data.append([csvYr, csvMth, link])
 
